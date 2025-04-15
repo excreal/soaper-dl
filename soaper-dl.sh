@@ -1,36 +1,36 @@
 #!/usr/bin/env bash
 #
-# 🍿 Download TV series and Movies from Soaper using CLI (yt-dlp version) 🎬
+# Download TV series and Movies from Soaper using CLI
 #
 #/ Usage:
 #/   ./soaper-dl.sh [-n <name>] [-p <path>] [-e <num1,num2,num3-num4...>] [-l] [-s] [-d]
 #/
 #/ Options:
-#/   -n <name>               🎥 TV series or Movie name
-#/   -p <path>               📁 media path, e.g: /tv_XXXXXXXX.html
-#/                           🛑 ignored when "-n" is enabled
-#/   -e <num1,num3-num4...>  #️⃣ optional, episode number to download
-#/                           🧠 e.g: episode number "3.2" means Season 3 Episode 2
-#/                           📊 multiple episode numbers separated by ","
-#/                           🔢 episode range using "-"
-#/   -l                      👀 optional, list video or subtitle link without downloading
-#/   -s                      📝 optional, download subtitle only
-#/   -d                      🐞 enable debug mode
-#/   -h | --help             📖 display this help message
+#/   -n <name>               TV series or Movie name
+#/   -p <path>               media path, e.g: /tv_XXXXXXXX.html
+#/                           ingored when "-n" is enabled
+#/   -e <num1,num3-num4...>  optional, episode number to download
+#/                           e.g: episode number "3.2" means Season 3 Episode 2
+#/                           multiple episode numbers seperated by ","
+#/                           episode range using "-"
+#/   -l                      optional, list video or subtitle link without downloading
+#/   -s                      optional, download subtitle only
+#/   -d                      enable debug mode
+#/   -h | --help             display this help message
 
-set -e 🚫
-set -u 📦
+set -e
+set -u
 
 usage() {
-    printf "%b\n" "$(grep '^#/' "$0" | cut -c4-)" && exit 1 💥
+    printf "%b\n" "$(grep '^#/' "$0" | cut -c4-)" && exit 1
 }
 
 set_var() {
-    _CURL="$(command -v curl)" || command_not_found "curl 🌐"
-    _JQ="$(command -v jq)" || command_not_found "jq 🧪"
-    _PUP="$(command -v pup)" || command_not_found "pup 🐶"
-    _FZF="$(command -v fzf)" || command_not_found "fzf 🔍"
-    _YT_DLP="$(command -v yt-dlp)" || command_not_found "yt-dlp 📥"
+    _CURL="$(command -v curl)" || command_not_found "curl"
+    _JQ="$(command -v jq)" || command_not_found "jq"
+    _PUP="$(command -v pup)" || command_not_found "pup"
+    _FZF="$(command -v fzf)" || command_not_found "fzf"
+    _YTDLP="$(command -v yt-dlp)" || command_not_found "yt-dlp"
 
     _HOST="https://soaper.live"
     _SEARCH_URL="$_HOST/search/keyword/"
@@ -41,40 +41,61 @@ set_var() {
     _EPISODE_LINK_LIST=".episode.link"
     _EPISODE_TITLE_LIST=".episode.title"
     _MEDIA_HTML=".media.html"
-    _SUBTITLE_LANG="${SOAPER_SUBTITLE_LANG:-en} 🌍"
+    _SUBTITLE_LANG="${SOAPER_SUBTITLE_LANG:-en}"
 }
 
 set_args() {
     expr "$*" : ".*--help" > /dev/null && usage
     while getopts ":hlsdn:x:p:e:" opt; do
         case $opt in
-            n) _INPUT_NAME="${OPTARG// /%20}" ;;
-            p) _MEDIA_PATH="$OPTARG" ;;
-            e) _MEDIA_EPISODE="$OPTARG" ;;
-            l) _LIST_LINK_ONLY=true ;;
-            s) _DOWNLOAD_SUBTITLE_ONLY=true ;;
-            d) _DEBUG_MODE=true; set -x ;;
-            h) usage ;;
-            \?) print_error "❌ Invalid option: -$OPTARG" ;;
+            n)
+                _INPUT_NAME="${OPTARG// /%20}"
+                ;;
+            p)
+                _MEDIA_PATH="$OPTARG"
+                ;;
+            e)
+                _MEDIA_EPISODE="$OPTARG"
+                ;;
+            l)
+                _LIST_LINK_ONLY=true
+                ;;
+            s)
+                _DOWNLOAD_SUBTITLE_ONLY=true
+                ;;
+            d)
+                _DEBUG_MODE=true
+                set -x
+                ;;
+            h)
+                usage
+                ;;
+            \?)
+                print_error "Invalid option: -$OPTARG"
+                ;;
         esac
     done
 }
 
 print_info() {
-    printf "%b\n" "\033[32m[INFO] ✅\033[0m $1" >&2
+    # $1: info message
+    printf "%b\n" "\033[32m[INFO]\033[0m $1" >&2
 }
 
 print_warn() {
-    printf "%b\n" "\033[33m[WARNING] ⚠️\033[0m $1" >&2
+    # $1: warning message
+    printf "%b\n" "\033[33m[WARNING]\033[0m $1" >&2
 }
 
 print_error() {
-    printf "%b\n" "\033[31m[ERROR] ❌\033[0m $1" >&2
+    # $1: error message
+    printf "%b\n" "\033[31m[ERROR]\033[0m $1" >&2
     exit 1
 }
 
 command_not_found() {
-    print_error "🚫 $1 command not found!"
+    # $1: command name
+    print_error "$1 command not found!"
 }
 
 sed_remove_space() {
@@ -82,10 +103,12 @@ sed_remove_space() {
 }
 
 download_media_html() {
-    "$_CURL" -sS "${_HOST}${1}" > "$_SCRIPT_PATH/$_MEDIA_NAME/$_MEDIA_HTML" 🌐
+    # $1: media link
+    "$_CURL" -sS "${_HOST}${1}" > "$_SCRIPT_PATH/$_MEDIA_NAME/$_MEDIA_HTML"
 }
 
 get_media_name() {
+    # $1: media link
     "$_CURL" -sS "${_HOST}${1}" \
         | $_PUP ".panel-body h4 text{}" \
         | head -1 \
@@ -93,11 +116,12 @@ get_media_name() {
 }
 
 search_media_by_name() {
+    # $1: media name
     local d t len l n lb
     d="$("$_CURL" -sS "${_SEARCH_URL}$1")"
     t="$($_PUP ".thumbnail" <<< "$d")"
     len="$(grep -c "class=\"thumbnail" <<< "$t")"
-    [[ "$len" == "0" ]] && print_error "🔎 Media not found!"
+    [[ -z "$len" || "$len" == "0" ]] && print_error "Media not found!"
 
     true > "$_SEARCH_LIST_FILE"
     for i in $(seq 1 "$len"); do
@@ -109,12 +133,13 @@ search_media_by_name() {
 }
 
 is_movie() {
-    [[ "$1" =~ ^/movie_.* ]] && return 0 || return 1 🎞️
+    # $1: media path
+    [[ "$1" =~ ^/movie_.* ]] && return 0 || return 1
 }
 
 download_source() {
     local d a
-    mkdir -p "$_SCRIPT_PATH/$_MEDIA_NAME" 📁
+    mkdir -p "$_SCRIPT_PATH/$_MEDIA_NAME"
     d="$("$_CURL" -sS "${_HOST}${_MEDIA_PATH}")"
     a="$($_PUP ".alert-info-ex" <<< "$d")"
     if is_movie "$_MEDIA_PATH"; then
@@ -125,6 +150,7 @@ download_source() {
 }
 
 download_episodes() {
+    # $1: episode number string
     local origel el uniqel se
     origel=()
     if [[ "$1" == *","* ]]; then
@@ -151,7 +177,8 @@ download_episodes() {
     done
 
     IFS=" " read -ra uniqel <<< "$(printf '%s\n' "${el[@]}" | sort -u -V | tr '\n' ' ')"
-    [[ ${#uniqel[@]} == 0 ]] && print_error "❌ Wrong episode number!"
+
+    [[ ${#uniqel[@]} == 0 ]] && print_error "Wrong episode number!"
 
     for e in "${uniqel[@]}"; do
         download_episode "$e"
@@ -159,14 +186,17 @@ download_episodes() {
 }
 
 download_episode() {
+    # $1: episode number
     local l
     l=$(grep "\[$1\] " "$_SCRIPT_PATH/$_MEDIA_NAME/$_EPISODE_LINK_LIST" \
         | awk -F '] ' '{print $2}')
-    [[ "$l" != *"/"* ]] && print_error "⚠️ Wrong download link or episode not found!"
+    [[ "$l" != *"/"* ]] && print_error "Wrong download link or episode not found!"
     download_media "$l" "$1"
 }
 
 download_media() {
+    # $1: media link
+    # $2: media name
     local u d el sl p
     download_media_html "$1"
     is_movie "$_MEDIA_PATH" && u="GetMInfoAjax" || u="GetEInfoAjax"
@@ -176,7 +206,6 @@ download_media() {
         --data-raw "pass=${p}")"
     el="${_HOST}$($_JQ -r '.val' <<< "$d")"
     [[ "$el" != *".m3u8" ]] && el="$($_JQ -r '.val_bak' <<< "$d")"
-    
     if [[ "$($_JQ '.subs | length' <<< "$d")" -gt "0" ]]; then
         sl="$($_JQ -r '.subs[]| select(.name | ascii_downcase | contains ("'"$_SUBTITLE_LANG"'")) | .path' <<< "$d" | head -1)"
         sl="${sl// /%20}"
@@ -187,20 +216,20 @@ download_media() {
 
     if [[ -z ${_LIST_LINK_ONLY:-} ]]; then
         if [[ -n "${sl:-}" && "$sl" != "$_HOST" ]]; then
-            print_info "📥 Downloading subtitle $2..."
+            print_info "Downloading subtitle $2..."
             "$_CURL" "${sl}" > "$_SCRIPT_PATH/${_MEDIA_NAME}/${2}_${_SUBTITLE_LANG}.srt"
         fi
         if [[ -z ${_DOWNLOAD_SUBTITLE_ONLY:-} ]]; then
-            print_info "📺 Downloading video $2..."
-            "$_YT_DLP" -f b --buffer-size 32M -N 16 --hls-prefer-native --continue \
-                --no-part --downloader aria2c \
-                "$el" -o "$_SCRIPT_PATH/${_MEDIA_NAME}/${2}.%(ext)s"
+            print_info "Downloading video $2..."
+        "$_YTDLP" -f b --buffer-size 32M -N 8 --hls-prefer-native --continue "$el" -o "$_SCRIPT_PATH/${_MEDIA_NAME}/${2}.mp4"
         fi
     else
         if [[ -z ${_DOWNLOAD_SUBTITLE_ONLY:-} ]]; then
             echo "$el"
         else
-            [[ -n "${sl:-}" ]] && echo "${sl}"
+            if [[ -n "${sl:-}" ]]; then
+                echo "${sl}"
+            fi
         fi
     fi
 }
@@ -216,10 +245,12 @@ create_episode_list() {
     for i in $(seq "$slen" -1 1); do
         sn=$((slen - i + 1))
         t="$($_PUP ".alert-info-ex:nth-child($i) div text{}" < "$sf" \
-            | sed_remove_space | tac \
+            | sed_remove_space \
+            | tac \
             | awk '{print "[" num  "." NR "] " $0}' num="${sn}")"
         l="$($_PUP ".alert-info-ex:nth-child($i) div a attr{href}" < "$sf" \
-            | sed_remove_space | tac \
+            | sed_remove_space \
+            | tac \
             | awk '{print "[" num  "." NR "] " $0}' num="${sn}")"
         echo "$t" >> "$et"
         echo "$l" >> "$el"
@@ -228,7 +259,7 @@ create_episode_list() {
 
 select_episodes_to_download() {
     cat "$_SCRIPT_PATH/$_MEDIA_NAME/$_EPISODE_TITLE_LIST" >&2
-    echo -n "🎯 Which episode(s) to download: " >&2
+    echo -n "Which episode(s) to download: " >&2
     read -r s
     echo "$s"
 }
@@ -243,14 +274,21 @@ main() {
         _MEDIA_PATH=$($_FZF -1 <<< "$(sort -u <<< "$mlist")" | awk -F']' '{print $1}' | sed -E 's/^\[//')
     fi
 
-    [[ -z "${_MEDIA_PATH:-}" ]] && print_error "📉 Media not found! Missing option -n or -p?"
-    _MEDIA_NAME=$(sort -u "$_SEARCH_LIST_FILE" | grep "$_MEDIA_PATH" | awk -F '] ' '{print $2}' | sed -E 's/\//_/g')
-    [[ -z "$_MEDIA_NAME" ]] && _MEDIA_NAME="$(get_media_name "$_MEDIA_PATH")"
+    [[ -z "${_MEDIA_PATH:-}" ]] && print_error "Media not found! Missing option -n <name> or -p <path>?"
+    [[ ! -s "$_SEARCH_LIST_FILE" ]] && print_error "$_SEARCH_LIST_FILE not found. Please run \`-n <name>\` to generate it."
+    _MEDIA_NAME=$(sort -u "$_SEARCH_LIST_FILE" \
+                | grep "$_MEDIA_PATH" \
+                | awk -F '] ' '{print $2}' \
+                | sed -E 's/\//_/g')
+
+    [[ "$_MEDIA_NAME" == "" ]] && _MEDIA_NAME="$(get_media_name "$_MEDIA_PATH")"
 
     download_source
-    is_movie "$_MEDIA_PATH" && exit 0 🚪
+
+    is_movie "$_MEDIA_PATH" && exit 0
 
     create_episode_list
+
     [[ -z "${_MEDIA_EPISODE:-}" ]] && _MEDIA_EPISODE=$(select_episodes_to_download)
     download_episodes "$_MEDIA_EPISODE"
 }
