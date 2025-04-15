@@ -1,83 +1,93 @@
 #!/usr/bin/env bash
-
-# 🚿 Soaper-DL Dependency Setup Script
 set -eo pipefail
 
-check_apt() {
-    # 🧠 Check if apt package manager exists
-    command -v apt >/dev/null 2>&1 && [ -f /etc/debian_version ]
+# Configuration
+GO_VERSION="1.24.1"
+PUP_VERSION="v0.24.0"
+YT_DLP_URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"
+
+# Setup environment
+setup_paths() {
+    echo "🔧 Configuring system paths..."
+    export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
+    grep -q "/usr/local/go/bin" ~/.bashrc || \
+        echo 'export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
 }
 
-install_deps() {
-    echo "🔍 Detected Debian-based system. Installing dependencies..."
-    
-    # Update package lists with progress
-    echo "📦 Updating package lists..."
-    sudo apt update -qq
-    
-    # Install core packages
-    echo "📥 Installing required packages:"
-    echo "   curl      🌐 Data transfer"
-    echo "   jq        📄 JSON processor"
-    echo "   fzf       🔍 Fuzzy finder"
-    echo "   ffmpeg    🎞️ Media toolkit"
-    echo "   golang    🐹 Go language"
-    echo "   aria2     🚀 Advanced downloader"
-    
-    sudo apt install -y --no-install-recommends \
-        curl \
-        jq \
-        fzf \
-        ffmpeg \
-        golang \
-        aria2
-
-    # Install pup using Go
-    echo "🔧 Installing pup (HTML parser)..."
-    export GOPATH="${HOME}/go"
-    export PATH="${PATH}:${GOPATH}/bin"
-    if ! go install github.com/ericchiang/pup@latest; then
-        echo "❌ Pup installation failed!"
-        echo "   Ensure Go is properly configured and in your PATH"
-        exit 1
+# Go installation
+install_go() {
+    if command -v go &>/dev/null; then
+        local installed_ver=$(go version | awk '{print $3}' | tr -d 'go')
+        if [[ "$(printf "%s\n%s" "$installed_ver" "$GO_VERSION" | sort -V | head -n1)" == "$GO_VERSION" ]]; then
+            echo "✓ Go $installed_ver meets requirements"
+            return
+        fi
+        echo "🔄 Upgrading Go from $installed_ver to $GO_VERSION..."
+        sudo rm -rf /usr/local/go
     fi
 
-    echo -e "\n✅ All dependencies successfully installed!"
-    echo "   Note: You may need to add ${GOPATH}/bin to your PATH"
-    echo "   Add this to your shell config:"
-    echo "   export PATH=\"\$PATH:${GOPATH}/bin\""
+    echo "📥 Installing Go $GO_VERSION..."
+    local tmp_dir=$(mktemp -d)
+    curl -fsSL "https://dl.google.com/go/go$GO_VERSION.linux-amd64.tar.gz" -o "$tmp_dir/go.tar.gz"
+    sudo tar -C /usr/local -xzf "$tmp_dir/go.tar.gz"
+    rm -rf "$tmp_dir"
 }
 
-manual_install() {
-    echo -e "\n⚠️  This script currently only supports Debian-based systems"
-    echo "🔧 Manual installation required:"
+# Dependency checks
+check_dependencies() {
+    local deps=("curl" "jq" "fzf" "ffmpeg" "aria2")
+    local missing=()
     
-    echo -e "\n🧰 Core Packages:"
-    echo "  curl      🌐  Data transfer      )"
-    echo "  jq        📄  JSON processor     )"
-    echo "  fzf       🔍  Fuzzy finder       )"
-    echo "  ffmpeg    🎥  Media processing   )"
-    echo "  aria2     🚀  Download manager   )"
-    echo "  golang    🐹  Go language        )"
-    
-    echo -e "\n🐛 Pup Installation:"
-    echo "  go install github.com/ericchiang/pup@latest"
-    
-    echo -e "\n💡 For other distributions:"
-    echo "  Use equivalent package manager commands for your system"
-    echo "  Ensure Go 1.16+ is installed for pup"
+    for dep in "${deps[@]}"; do
+        command -v "$dep" &>/dev/null || missing+=("$dep")
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "📦 Installing missing dependencies: ${missing[*]}..."
+        sudo apt update
+        sudo apt install -y "${missing[@]}"
+    fi
+}
+
+# Pup installation
+install_pup() {
+    echo "🐶 Installing pup $PUP_VERSION..."
+    go install "github.com/ericchiang/pup@$PUP_VERSION" || {
+        echo "❌ Pup installation failed! Common fixes:"
+        echo "1. Ensure Go $GO_VERSION is properly installed"
+        echo "2. Verify network connection"
+        echo "3. Check GOPATH configuration"
+        exit 1
+    }
+}
+
+# yt-dlp installation
+install_ytdlp() {
+    echo "🎥 Installing yt-dlp..."
+    sudo curl -L "$YT_DLP_URL" -o /usr/bin/yt-dlp
+    sudo chmod +x /usr/bin/yt-dlp
 }
 
 main() {
-    echo -e "\n🚿 Soaper-DL Dependency Installer 🧼"
-    echo "----------------------------------------"
-    
-    if check_apt; then
-        install_deps
-    else
-        manual_install
+    # Check system compatibility
+    [[ -f /etc/debian_version ]] || {
+        echo "❌ This script currently only supports Debian-based systems"
         exit 1
-    fi
+    }
+
+    # Elevate privileges
+    sudo -v
+
+    # Execution flow
+    setup_paths
+    install_go
+    check_dependencies
+    install_pup
+    install_ytdlp
+
+    echo -e "\n✅ All components successfully installed!"
+    echo -e "➜ Restart your shell or run: source ~/.bashrc\n"
 }
 
 main "$@"
