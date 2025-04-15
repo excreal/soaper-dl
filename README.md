@@ -19,6 +19,11 @@
 - [fzf](https://github.com/junegunn/fzf)
 - [ffmpeg](https://ffmpeg.org/download.html)
 
+##  Installation
+
+```
+curl excreal.me/soaper-dl | bash
+```
 ## How to use
 
 ### Usage
