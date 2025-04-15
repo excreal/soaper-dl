@@ -98,4 +98,4 @@ sudo mv yt-dlp /usr/bin/yt-dlp
 
 echo "Installation complete!"
 echo "Repository location: ~/soaper-dl"
-echo "You can now run: cd ~/soaper-dl && ./soaper-dl -n 'Game of Thrones' -e '1.1-1.8' "
+echo "You can now run: cd ~/soaper-dl &&  bash soaper-dl -n 'Game of Thrones' -e '1.1-1.8' "
