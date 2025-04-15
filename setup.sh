@@ -1,39 +1,39 @@
 #!/usr/bin/env bash
 set -e
 
-# Define required Go version
-GO_VERSION="1.24.2"
-GO_TAR="go${GO_VERSION}.linux-amd64.tar.gz"
+# Set consistent GOPATH configuration
+CUSTOM_GOPATH="$HOME/gopath"
+mkdir -p "$CUSTOM_GOPATH"{,/bin,/pkg,/src}
 
-# Update PATH for current session
-export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"
-echo 'export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"' >> ~/.bashrc
+# Update environment variables
+export GOPATH="$CUSTOM_GOPATH"
+export PATH="$PATH:/usr/local/go/bin:$GOPATH/bin"
+echo "export GOPATH=\"$CUSTOM_GOPATH\"" >> ~/.bashrc
+echo 'export PATH="$PATH:/usr/local/go/bin:$GOPATH/bin"' >> ~/.bashrc
 
 # Clone repository
-echo "Cloning soaper-dl repository..."
-if [ -d "$HOME/soaper-dl" ]; then
-    echo "Updating existing repository..."
-    git -C "$HOME/soaper-dl" pull
+REPO_DIR="$HOME/soaper-dl"
+echo "Cloning/updating repository..."
+if [ -d "$REPO_DIR" ]; then
+    git -C "$REPO_DIR" pull
 else
-    git clone https://github.com/excreal/soaper-dl.git "$HOME/soaper-dl"
+    git clone https://github.com/excreal/soaper-dl.git "$REPO_DIR"
 fi
 
-# Make script executable
-chmod +x "$HOME/soaper-dl/soaper-dl.sh"
-
-# Check Go installation
+# Install Go if missing
+GO_VERSION="1.24.2"
 if ! command -v go &>/dev/null; then
     echo "Installing Go $GO_VERSION..."
+    GO_TAR="go${GO_VERSION}.linux-amd64.tar.gz"
     wget "https://go.dev/dl/${GO_TAR}"
     sudo tar -C /usr/local -xzf "$GO_TAR"
     rm "$GO_TAR"
-    export PATH="$PATH:/usr/local/go/bin"
 fi
 
-# Install pup if missing
+# Install pup to custom GOPATH
 if ! command -v pup &>/dev/null; then
-    echo "Installing pup..."
-    go install github.com/ericchiang/pup@latest
+    echo "Installing pup to $GOPATH..."
+    GOBIN="$GOPATH/bin" go install github.com/ericchiang/pup@latest
 fi
 
 # Install yt-dlp only if missing
@@ -43,9 +43,19 @@ if ! command -v yt-dlp &>/dev/null; then
     curl -L -o yt-dlp "$YT_DLP_URL"
     chmod +x yt-dlp
     sudo mv yt-dlp /usr/bin/yt-dlp
-else
-    echo "yt-dlp already installed, skipping installation"
 fi
 
-echo "Installation complete!"
-echo "Run with: ~/soaper-dl/soaper-dl.sh -n 'Game of Thrones' -e '1.1-1.8'"
+# Make script executable
+chmod +x "$REPO_DIR/soaper-dl.sh"
+
+# Verify installations
+echo "Verifying environment:"
+echo -e "\nGo version:"
+go version
+echo -e "\nGOPATH:"
+go env GOPATH
+echo -e "\nInstalled components:"
+ls -lh "$GOPATH/bin/pup" /usr/bin/yt-dlp
+
+echo -e "\nInstallation complete!"
+echo "Run with: $REPO_DIR/soaper-dl.sh -n 'Game of Thrones' -e '1.1-1.8'"
