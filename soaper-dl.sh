@@ -3,7 +3,7 @@
 # Download TV series and Movies from Soaper using CLI
 #
 #/ Usage:
-#/   ./soaper-dl.sh [-n <name>] [-p <path>] [-e <num1,num2,num3-num4...>] [-l] [-s] [-d]
+#/   ./soaper-dl.sh [-n <name>] [-p <path>] [-e <num1,num2,num3-num4...>] [-l] [-s] [-d] [-u]
 #/
 #/ Options:
 #/   -n <name>               TV series or Movie name
@@ -16,6 +16,7 @@
 #/   -l                      optional, list video or subtitle link without downloading
 #/   -s                      optional, download subtitle only
 #/   -d                      enable debug mode
+#/   -u                      upload to GoFile after download
 #/   -h | --help             display this help message
 
 set -e
@@ -31,6 +32,7 @@ set_var() {
     _PUP="$(command -v pup)" || command_not_found "pup"
     _FZF="$(command -v fzf)" || command_not_found "fzf"
     _YTDLP="$(command -v yt-dlp)" || command_not_found "yt-dlp"
+    _ZIP="$(command -v zip)" || command_not_found "zip"
 
     _HOST="https://soaper.live"
     _SEARCH_URL="$_HOST/search/keyword/"
@@ -46,7 +48,7 @@ set_var() {
 
 set_args() {
     expr "$*" : ".*--help" > /dev/null && usage
-    while getopts ":hlsdn:x:p:e:" opt; do
+    while getopts ":hlsdun:x:p:e:" opt; do
         case $opt in
             n)
                 _INPUT_NAME="${OPTARG// /%20}"
@@ -66,6 +68,9 @@ set_args() {
             d)
                 _DEBUG_MODE=true
                 set -x
+                ;;
+            u)
+                _UPLOAD=true
                 ;;
             h)
                 usage
@@ -194,10 +199,27 @@ download_episode() {
     download_media "$l" "$1"
 }
 
+upload_to_gofile() {
+    # $1: file path
+    # $2: base filename
+    local server response link
+    server=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name')
+    response=$(curl -# -F "file=@$1" "https://${server}.gofile.io/uploadFile")
+    link=$(echo "$response" | jq -r '.data.downloadPage')
+    if [[ -z "$link" || "$link" == "null" ]]; then
+        print_warn "Failed to upload $1"
+        return 1
+    else
+        echo "${2}: ${link}" >> "$_SCRIPT_PATH/links.txt"
+        print_info "Uploaded $2 to GoFile: ${link}"
+        rm -f "$1"
+    fi
+}
+
 download_media() {
     # $1: media link
-    # $2: media name
-    local u d el sl p
+    # $2: episode number
+    local u d el sl p season episode season_pad episode_pad filename_base filename_video filename_sub
     download_media_html "$1"
     is_movie "$_MEDIA_PATH" && u="GetMInfoAjax" || u="GetEInfoAjax"
     p="$(sed 's/.*e_//;s/.html//' <<< "$1")"
@@ -214,14 +236,23 @@ download_media() {
         sl="${_HOST}$sl"
     fi
 
+    # Parse season and episode
+    season=$(cut -d. -f1 <<< "$2")
+    episode=$(cut -d. -f2 <<< "$2")
+    printf -v season_pad "%02d" "$season"
+    printf -v episode_pad "%02d" "$episode"
+    filename_base="${_MEDIA_NAME}_S${season_pad}E${episode_pad}"
+    filename_video="${filename_base}.mp4"
+    filename_sub="${filename_base}_${_SUBTITLE_LANG}.srt"
+
     if [[ -z ${_LIST_LINK_ONLY:-} ]]; then
         if [[ -n "${sl:-}" && "$sl" != "$_HOST" ]]; then
             print_info "Downloading subtitle $2..."
-            "$_CURL" "${sl}" > "$_SCRIPT_PATH/${_MEDIA_NAME}/${2}_${_SUBTITLE_LANG}.srt"
+            "$_CURL" -sS "${sl}" -o "$_SCRIPT_PATH/${_MEDIA_NAME}/${filename_sub}"
         fi
         if [[ -z ${_DOWNLOAD_SUBTITLE_ONLY:-} ]]; then
             print_info "Downloading video $2..."
-        "$_YTDLP" -f b --buffer-size 32M -N 8 --hls-prefer-native --continue "$el" -o "$_SCRIPT_PATH/${_MEDIA_NAME}/${2}.mp4"
+            "$_YTDLP" -f b --buffer-size 32M -N 8 --hls-prefer-native --continue "$el" -o "$_SCRIPT_PATH/${_MEDIA_NAME}/${filename_video}"
         fi
     else
         if [[ -z ${_DOWNLOAD_SUBTITLE_ONLY:-} ]]; then
@@ -230,6 +261,37 @@ download_media() {
             if [[ -n "${sl:-}" ]]; then
                 echo "${sl}"
             fi
+        fi
+    fi
+
+    # Upload to GoFile if enabled
+    if [[ -n "${_UPLOAD:-}" ]]; then
+        files_to_upload=()
+        video_path="$_SCRIPT_PATH/${_MEDIA_NAME}/${filename_video}"
+        sub_path="$_SCRIPT_PATH/${_MEDIA_NAME}/${filename_sub}"
+        zip_file="${filename_base}.zip"
+
+        # Check if files exist
+        [[ -f "$video_path" ]] && files_to_upload+=("$video_path")
+        [[ -f "$sub_path" ]] && files_to_upload+=("$sub_path")
+
+        if [[ ${#files_to_upload[@]} -gt 0 ]]; then
+            # Compress if subtitle exists
+            if [[ ${#files_to_upload[@]} -gt 1 ]]; then
+                if ! "$_ZIP" -j "$_SCRIPT_PATH/${_MEDIA_NAME}/${zip_file}" "${files_to_upload[@]}"; then
+                    print_warn "Failed to compress files, uploading separately..."
+                else
+                    files_to_upload=("$_SCRIPT_PATH/${_MEDIA_NAME}/${zip_file}")
+                fi
+            fi
+
+            # Upload each file
+            for file in "${files_to_upload[@]}"; do
+                upload_to_gofile "$file" "$filename_base" || continue
+            done
+
+            # Cleanup original files
+            rm -f "$video_path" "$sub_path"
         fi
     fi
 }
@@ -279,9 +341,9 @@ main() {
     _MEDIA_NAME=$(sort -u "$_SEARCH_LIST_FILE" \
                 | grep "$_MEDIA_PATH" \
                 | awk -F '] ' '{print $2}' \
-                | sed -E 's/\//_/g')
+                | sed -E 's/\//_/g; s/ +/_/g')
 
-    [[ "$_MEDIA_NAME" == "" ]] && _MEDIA_NAME="$(get_media_name "$_MEDIA_PATH")"
+    [[ "$_MEDIA_NAME" == "" ]] && _MEDIA_NAME="$(get_media_name "$_MEDIA_PATH" | sed 's/ /_/g')"
 
     download_source
 

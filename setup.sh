@@ -48,6 +48,9 @@ fi
 # Make script executable
 chmod +x "$REPO_DIR/soaper-dl.sh"
 
+sudo apt update
+sudo apt install fzf curl jq ffmpeg zip
+
 # Verify installations
 echo "Verifying environment:"
 echo -e "\nGo version:"
