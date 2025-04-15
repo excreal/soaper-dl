@@ -3,15 +3,13 @@ set -e
 
 # Set consistent GOPATH configuration
 CUSTOM_GOPATH="$HOME/gopath"
-mkdir -p "$CUSTOM_GOPATH"{,/bin,/pkg,/src}
+mkdir -p "$CUSTOM_GOPATH"
 
 # Update environment variables
-echo 'export PATH="$PATH:$HOME/gopath/bin"' >> ~/.bashrc
-source ~/.bashrc
+
 export GOPATH="$CUSTOM_GOPATH"
 export PATH="$PATH:/usr/local/go/bin:$GOPATH/bin"
 echo "export GOPATH=\"$CUSTOM_GOPATH\"" >> ~/.bashrc
-echo 'export PATH="$PATH:/usr/local/go/bin:$GOPATH/bin"' >> ~/.bashrc
 
 # Clone repository
 REPO_DIR="$HOME/soaper-dl"
