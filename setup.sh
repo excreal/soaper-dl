@@ -7,10 +7,18 @@ GO_TAR="go${GO_VERSION}.linux-amd64.tar.gz"
 
 # Update PATH for current session and future shell sessions
 echo "Setting up PATH..."
-echo 'export PATH="$PATH:/usr/local/go/bin"' >> ~/.bashrc
+echo 'export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"' >> ~/.bashrc
 source ~/.bashrc
-export PATH="$PATH:/usr/local/go/bin"
 export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"
+
+# Clone repository to home directory
+echo "Cloning soaper-dl repository..."
+if [ -d "$HOME/soaper-dl" ]; then
+    echo "Repository already exists at ~/soaper-dl. Updating..."
+    git -C "$HOME/soaper-dl" pull
+else
+    git clone https://github.com/excreal/soaper-dl.git "$HOME/soaper-dl"
+fi
 
 # Check existing Go version
 if command -v go &>/dev/null; then
@@ -37,6 +45,10 @@ fi
 # Ensure Go is in PATH for the rest of the script
 export PATH="$PATH:/usr/local/go/bin"
 
+# Add Go alias as fallback
+echo "alias go='/usr/local/go/bin/go'" >> ~/.bashrc
+source ~/.bashrc
+
 # Verify Go installation
 if ! command -v go &>/dev/null; then
     echo "Error: Go command not found after installation."
@@ -47,10 +59,10 @@ fi
 if command -v apt &>/dev/null; then
     echo "Using apt for installation..."
     sudo apt update
-    sudo apt install -y curl jq fzf ffmpeg aria2
+    sudo apt install -y curl jq fzf ffmpeg aria2 git
 else
     echo "No supported package manager found (apt)."
-    echo "Please install curl, jq, fzf, ffmpeg, and aria2 manually."
+    echo "Please install curl, jq, fzf, ffmpeg, aria2, and git manually."
     exit 1
 fi
 
@@ -74,9 +86,6 @@ if command -v yt-dlp &>/dev/null; then
     sudo rm -f "$(command -v yt-dlp)"
 fi
 
-# Remove common installation locations
-sudo rm -f /usr/bin/yt-dlp /usr/local/bin/yt-dlp
-
 # Install yt-dlp
 echo "Downloading yt-dlp from the latest release..."
 YT_DLP_URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"
@@ -87,5 +96,6 @@ echo "Installing yt-dlp to /usr/bin..."
 chmod +x yt-dlp
 sudo mv yt-dlp /usr/bin/yt-dlp
 
-echo "yt-dlp has been installed successfully."
-echo "All dependencies have been installed successfully."
+echo "Installation complete!"
+echo "Repository location: ~/soaper-dl"
+echo "You can now run: cd ~/soaper-dl && ./soaper-dl -n 'Game of Thrones' -e '1.1-1.8' "
