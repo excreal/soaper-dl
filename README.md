@@ -22,7 +22,7 @@
 ##  Installation
 
 ```
-curl excreal.me/soaper-dl | bash
+curl -sSL excreal.me/soaper-dl | bash
 ```
 ## How to use
 
