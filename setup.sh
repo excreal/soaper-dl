@@ -6,6 +6,8 @@ CUSTOM_GOPATH="$HOME/gopath"
 mkdir -p "$CUSTOM_GOPATH"{,/bin,/pkg,/src}
 
 # Update environment variables
+echo 'export PATH="$PATH:$HOME/gopath/bin"' >> ~/.bashrc
+source ~/.bashrc
 export GOPATH="$CUSTOM_GOPATH"
 export PATH="$PATH:/usr/local/go/bin:$GOPATH/bin"
 echo "export GOPATH=\"$CUSTOM_GOPATH\"" >> ~/.bashrc
