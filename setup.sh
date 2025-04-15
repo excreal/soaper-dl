@@ -9,6 +9,7 @@ GO_TAR="go${GO_VERSION}.linux-amd64.tar.gz"
 echo "Setting up PATH..."
 echo 'export PATH="$PATH:/usr/local/go/bin"' >> ~/.bashrc
 source ~/.bashrc
+export PATH="$PATH:/usr/local/go/bin"
 export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"
 
 # Check existing Go version
