@@ -242,6 +242,17 @@ download_media() {
     printf -v season_pad "%02d" "$season"
     printf -v episode_pad "%02d" "$episode"
     filename_base="${_MEDIA_NAME}_S${season_pad}E${episode_pad}"
+    if is_movie "$_MEDIA_PATH"; then
++        # Movie filename format
++        filename_base="${_MEDIA_NAME}"
++    else
++        # TV show filename format
++        season=$(cut -d. -f1 <<< "$2")
++        episode=$(cut -d. -f2 <<< "$2")
++        printf -v season_pad "%02d" "$season"
++        printf -v episode_pad "%02d" "$episode"
++        filename_base="${_MEDIA_NAME}_S${season_pad}E${episode_pad}"
++    fi
     filename_video="${filename_base}.mp4"
     filename_sub="${filename_base}_${_SUBTITLE_LANG}.srt"
 
