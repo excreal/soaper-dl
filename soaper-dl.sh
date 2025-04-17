@@ -51,7 +51,7 @@ set_args() {
     while getopts ":hlsdun:x:p:e:" opt; do
         case $opt in
             n)
-                _INPUT_NAME="${OPTARG}"
+                _INPUT_NAME="${OPTARG// /%20}"
                 ;;
             p)
                 _MEDIA_PATH="$OPTARG"
@@ -83,19 +83,23 @@ set_args() {
 }
 
 print_info() {
+    # $1: info message
     printf "%b\n" "\033[32m[INFO]\033[0m $1" >&2
 }
 
 print_warn() {
+    # $1: warning message
     printf "%b\n" "\033[33m[WARNING]\033[0m $1" >&2
 }
 
 print_error() {
+    # $1: error message
     printf "%b\n" "\033[31m[ERROR]\033[0m $1" >&2
     exit 1
 }
 
 command_not_found() {
+    # $1: command name
     print_error "$1 command not found!"
 }
 
@@ -104,10 +108,12 @@ sed_remove_space() {
 }
 
 download_media_html() {
+    # $1: media link
     "$_CURL" -sS "${_HOST}${1}" > "$_SCRIPT_PATH/$_MEDIA_NAME/$_MEDIA_HTML"
 }
 
 get_media_name() {
+    # $1: media link
     "$_CURL" -sS "${_HOST}${1}" \
         | $_PUP ".panel-body h4 text{}" \
         | head -1 \
@@ -115,8 +121,9 @@ get_media_name() {
 }
 
 search_media_by_name() {
+    # $1: media name
     local d t len l n lb
-    d="$("$_CURL" -sS "${_SEARCH_URL}${_INPUT_NAME// /%20}")"
+    d="$("$_CURL" -sS "${_SEARCH_URL}$1")"
     t="$($_PUP ".thumbnail" <<< "$d")"
     len="$(grep -c "class=\"thumbnail" <<< "$t")"
     [[ -z "$len" || "$len" == "0" ]] && print_error "Media not found!"
@@ -131,6 +138,7 @@ search_media_by_name() {
 }
 
 is_movie() {
+    # $1: media path
     [[ "$1" =~ ^/movie_.* ]] && return 0 || return 1
 }
 
@@ -147,6 +155,7 @@ download_source() {
 }
 
 download_episodes() {
+    # $1: episode number string
     local origel el uniqel se
     origel=()
     if [[ "$1" == *","* ]]; then
@@ -156,7 +165,7 @@ download_episodes() {
         done
     else
         origel+=("$1")
-    done
+    fi
 
     el=()
     for i in "${origel[@]}"; do
@@ -182,14 +191,17 @@ download_episodes() {
 }
 
 download_episode() {
+    # $1: episode number
     local l
-    l=$(grep "\\[$1\\] " "$_SCRIPT_PATH/$_MEDIA_NAME/$_EPISODE_LINK_LIST" \
+    l=$(grep "\[$1\] " "$_SCRIPT_PATH/$_MEDIA_NAME/$_EPISODE_LINK_LIST" \
         | awk -F '] ' '{print $2}')
     [[ "$l" != *"/"* ]] && print_error "Wrong download link or episode not found!"
     download_media "$l" "$1"
 }
 
 upload_to_gofile() {
+    # $1: file path
+    # $2: base filename
     local server response link
     server=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name')
     response=$(curl -# -F "file=@$1" "https://${server}.gofile.io/uploadFile")
@@ -205,6 +217,8 @@ upload_to_gofile() {
 }
 
 download_media() {
+    # $1: media link
+    # $2: episode number
     local u d el sl p season episode season_pad episode_pad filename_base filename_video filename_sub
     download_media_html "$1"
     is_movie "$_MEDIA_PATH" && u="GetMInfoAjax" || u="GetEInfoAjax"
@@ -222,58 +236,54 @@ download_media() {
         sl="${_HOST}$sl"
     fi
 
+    # Generate appropriate filename
     if is_movie "$_MEDIA_PATH"; then
+        # Movie filename format
         filename_base="${_MEDIA_NAME}"
     else
+        # TV show filename format
         season=$(cut -d. -f1 <<< "$2")
         episode=$(cut -d. -f2 <<< "$2")
         printf -v season_pad "%02d" "$season"
         printf -v episode_pad "%02d" "$episode"
-        filename_base="${_MEDIA_NAME} S${season_pad}E${episode_pad}"
+        filename_base="${_MEDIA_NAME}_S${season_pad}E${episode_pad}"
     fi
 
     filename_video="${filename_base}.mp4"
-    filename_sub="${filename_base} ${_SUBTITLE_LANG}.srt"
+    filename_sub="${filename_base}_${_SUBTITLE_LANG}.srt"
 
     if [[ -z ${_LIST_LINK_ONLY:-} ]]; then
         if [[ -n "${sl:-}" && "$sl" != "$_HOST" ]]; then
-            print_info "Downloading subtitle ${filename_sub}..."
+            print_info "Downloading subtitle $2..."
             "$_CURL" -sS "${sl}" -o "$_SCRIPT_PATH/${_MEDIA_NAME}/${filename_sub}"
         fi
-        
         if [[ -z ${_DOWNLOAD_SUBTITLE_ONLY:-} ]]; then
-            print_info "Downloading video ${filename_video}..."
-            "$_YTDLP" -f b \
-                --retries 10 \
-                --fragment-retries 50 \
-                --hls-use-mpegts \
-                --limit-rate 5M \
-                --buffer-size 64M \
-                -N 16 \
-                --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-                --hls-prefer-native \
-                --continue \
-                "$el" \
-                -o "$_SCRIPT_PATH/${_MEDIA_NAME}/${filename_video}"
+            print_info "Downloading video $2..."
+            "$_YTDLP" -f b --buffer-size 32M -N 8 --hls-prefer-native --continue "$el" -o "$_SCRIPT_PATH/${_MEDIA_NAME}/${filename_video}"
         fi
     else
         if [[ -z ${_DOWNLOAD_SUBTITLE_ONLY:-} ]]; then
             echo "$el"
         else
-            [[ -n "${sl:-}" ]] && echo "${sl}"
+            if [[ -n "${sl:-}" ]]; then
+                echo "${sl}"
+            fi
         fi
     fi
 
+    # Upload to GoFile if enabled
     if [[ -n "${_UPLOAD:-}" ]]; then
         files_to_upload=()
         video_path="$_SCRIPT_PATH/${_MEDIA_NAME}/${filename_video}"
         sub_path="$_SCRIPT_PATH/${_MEDIA_NAME}/${filename_sub}"
         zip_file="${filename_base}.zip"
 
+        # Check if files exist
         [[ -f "$video_path" ]] && files_to_upload+=("$video_path")
         [[ -f "$sub_path" ]] && files_to_upload+=("$sub_path")
 
         if [[ ${#files_to_upload[@]} -gt 0 ]]; then
+            # Compress if subtitle exists
             if [[ ${#files_to_upload[@]} -gt 1 ]]; then
                 if ! "$_ZIP" -j "$_SCRIPT_PATH/${_MEDIA_NAME}/${zip_file}" "${files_to_upload[@]}"; then
                     print_warn "Failed to compress files, uploading separately..."
@@ -282,10 +292,12 @@ download_media() {
                 fi
             fi
 
+            # Upload each file
             for file in "${files_to_upload[@]}"; do
-                upload_to_gofile "$file" "${filename_base}" || continue
+                upload_to_gofile "$file" "$filename_base" || continue
             done
 
+            # Cleanup original files
             rm -f "$video_path" "$sub_path"
         fi
     fi
@@ -327,17 +339,18 @@ main() {
 
     local mlist=""
     if [[ -n "${_INPUT_NAME:-}" ]]; then
-        mlist="$(search_media_by_name)"
+        mlist="$(search_media_by_name "$_INPUT_NAME")"
         _MEDIA_PATH=$($_FZF -1 <<< "$(sort -u <<< "$mlist")" | awk -F']' '{print $1}' | sed -E 's/^\[//')
     fi
 
     [[ -z "${_MEDIA_PATH:-}" ]] && print_error "Media not found! Missing option -n <name> or -p <path>?"
+    [[ ! -s "$_SEARCH_LIST_FILE" ]] && print_error "$_SEARCH_LIST_FILE not found. Please run \`-n <name>\` to generate it."
     _MEDIA_NAME=$(sort -u "$_SEARCH_LIST_FILE" \
                 | grep "$_MEDIA_PATH" \
                 | awk -F '] ' '{print $2}' \
-                | sed -E 's/\// /g; s/[\]//g')
+                | sed -E 's/\//_/g; s/ +/_/g')
 
-    [[ "$_MEDIA_NAME" == "" ]] && _MEDIA_NAME="$(get_media_name "$_MEDIA_PATH")"
+    [[ "$_MEDIA_NAME" == "" ]] && _MEDIA_NAME="$(get_media_name "$_MEDIA_PATH" | sed 's/ /_/g')"
 
     download_source
 
