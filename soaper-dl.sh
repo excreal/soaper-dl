@@ -122,7 +122,7 @@ search_media_by_name() {
     [[ -z "$len" || "$len" == "0" ]] && print_error "Media not found!"
 
     true > "$_SEARCH_LIST_FILE"
-    for i in $(seq 1 "$len"); do  # Fixed line
+    for i in $(seq 1 "$len"); do
         n="$($_PUP ".thumbnail:nth-child($i) h5 a:nth-child(1) text{}" <<< "$t" | sed_remove_space)"
         l="$($_PUP ".thumbnail:nth-child($i) h5 a:nth-child(1) attr{href}" <<< "$t" | sed_remove_space)"
         lb="$($_PUP --charset UTF-8 ".thumbnail:nth-child($i) .label-info text{}" <<< "$t" | sed_remove_space)"
@@ -156,6 +156,7 @@ download_episodes() {
         done
     else
         origel+=("$1")
+    done
 
     el=()
     for i in "${origel[@]}"; do
