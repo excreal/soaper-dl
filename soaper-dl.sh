@@ -156,7 +156,6 @@ download_episodes() {
         done
     else
         origel+=("$1")
-    done
 
     el=()
     for i in "${origel[@]}"; do
